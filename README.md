@@ -1,1 +1,1 @@
-Repository for S&P 500 Time Series Analysis Project
+"This is a line from RStudio"
