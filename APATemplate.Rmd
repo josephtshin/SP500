@@ -1,0 +1,163 @@
+---
+title             : "Time Series Analysis: S&P 500 Stock Market Closing Prices"
+shorttitle        : "Time Series Analysis"
+
+author: 
+  - name          : "Joseph Shin"
+    affiliation   : "1"
+    email         : "joseph36@illinois.edu"
+    role: # Contributorship roles (e.g., CRediT, https://credit.niso.org/)
+      - "Conceptualization"
+      - "Writing - Original Draft Preparation"
+      - "Writing - Review & Editing"
+      - "Coding"
+      - "Interpretations"
+
+affiliation:
+  - id            : "1"
+    institution   : "UIUC"
+
+
+authornote: |
+    Thank you to all of the support I have received from my professor, TA, and my classmate in this course. No matter what grade result, I will always learn from these experiences to develop my work ethic and approach. For this project, I chose to perform a time series analysis on the S&P 500 Index. I have always wanted to try working with stock market predictions, so I chose to give this an attempt. After completing this project, I have learned a lot through my work, and I plan to grow my skills in the future.
+
+abstract: |
+  In this study, the main objective is to forecast the closing prices of the S&P 500 stock index using Seasonal Autoregressive Integrated Moving Average, otherwise known as SARIMA. Since stock market prices have a complex pattern influenced by economic factors, investor behavior, market trends, and real-life events, I want to accurately forecast the future closing prices by performing model transformations and model diagnostics to get a more accurate result.
+  
+  As a result, the next five S&P 500 closing price predicted values after October 29th, 2024, are $5,832.61, $5,832.13, $5,835.73, $5,835.73, and $5,835.73, and the standard error of these values are $30.48, $41.59, $50.67, $58.26, $65.00. This result reveals that there is a stable pattern around $5,832 - $5,835 for the S&P 500 stock prices, while the standard errors slowly increases in the future. The fact that the next five forecasted values seems stable rather than showing unexpected fluctuations or continued trends is a surprise. Additionally, even though the standard errors increases, the predicted values are stabilized in a small range of values which emphasizes the confidence in the performance of these values.
+  
+  Due to the stability, this may imply that the market is much more resilient and the investors are more consistent and confident during this forecasting period. This can mean that the economic conditions are steady, the consumers solidly spend, and the businesses are performing at a consistent pace. Additionally, since the forecast is stable, it may tell investors to not change their current investment strategy. The forecasted S&P 500 index values suggest market stability, where external influences are balanced, which leads to minimal fluctuations. The increasing uncertainty over time makes sense since as time goes on, since the natural variability may increase as well. This is reflected on the standard errors, and it emphasizes the significance of unpredictability in scientific modeling.
+  
+  <!-- https://tinyurl.com/ybremelq -->
+
+
+bibliography      : "r-references.bib"
+
+floatsintext      : no
+linenumbers       : yes
+draft             : no
+mask              : no
+
+figurelist        : no
+tablelist         : no
+footnotelist      : no
+
+classoption       : "man"
+output            : papaja::apa6_pdf
+---
+
+```{r setup, include = FALSE}
+library("papaja")
+r_refs("r-references.bib")
+library("astsa")
+```
+
+```{r analysis-preferences}
+# Seed for random number generation
+set.seed(42)
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed,fig.height = 3)
+```
+
+# Introduction
+
+  The problem that I am issuing from this S&P 500 data set is to determine what the future values of the market's closing price will be after October 29th, 2024. The data provides the daily index value at market close, and the market closing time is at 4 pm ET. The index includes the top 500 leading companies in the leading industries of the U.S. economy, and this covers about 75% of the U.S. equities. The data shows the market's overall health and trends, which is important for investors, economists, and policymakers in how they make their decisions based on the pattern. The original data set used to have missing dates and values, but I put those missing dates back in and made the values equal to the previous date's closing price value. I also had to change the S&P 500 observations for the dates that had no information and fill those in with the previous date's closing price value as well.
+
+
+https://fred.stlouisfed.org/series/SP500#
+
+(S&P Dow Jones Indices LLC)
+
+
+# Methods
+
+```{r, echo=FALSE,results='hide'}
+library(forecast)
+library(tseries)
+library(astsa)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(tidyr)
+
+data <- read.csv("SnP500.csv")
+
+data$DATE <- as.Date(data$DATE, format = "%m/%d/%y")
+
+
+full_dates <- data.frame(DATE = seq(min(data$DATE), max(data$DATE), by = "day"))
+
+data_full <- full_dates %>%
+  left_join(data, by = "DATE")
+
+data_full$SP500 <- ifelse(data_full$SP500 == ".", NA, data_full$SP500)
+
+data_full <- data_full %>%
+  mutate(SP500 = as.numeric(SP500)) %>%
+  fill(SP500, .direction = "down")
+
+write.csv(data_full, "SnP500_cleaned.csv", row.names = FALSE)
+
+
+
+DATE = data_full$DATE
+SP500 = ts(data_full$SP500)
+```
+
+## For my packages, I utilized forecast, tseries, astsa, readr, dplyr, lubridate, and tidyr. To start off, I had to clean the data set first. First, I changed the dates into a date format and filled in the missing dates. Then, for the dates with missing S&P 500 closing price value, I set those values to the previous day's closing price value.
+
+```{r, echo=FALSE}
+tsplot(DATE, SP500)
+adf.test(SP500) # Not Stationary
+```
+
+  Next, I had to make sure my time series was stationary. As you can see in the graph above, it is not stationary. I even tried using the adf.test() function to test the stationarity, and it rejected the null hypothesis since 0.4831 > 0.05 (H0 = Time series is stationary). Therefore, I had to transform the model. The transformation I chose to perform was log-transformation. Additionally, I took the difference of the log transformed model. Here are the results:
+
+```{r, echo=FALSE}
+diff_log_ts = diff(log(SP500))
+diff_log_ts_new = ts(diff_log_ts)
+tsplot(diff_log_ts_new)
+adf.test(diff_log_ts_new)
+```
+
+  As you can see in the graph, white noise is present. Additionally, the mean stays constant around a smaller range of values, and the variance does not fluctuate. The adf.test() function also proves that it is stationary since the p-value is smaller than 0.01. Therefore, I chose to continue with this differenced log-transformed model since it was stationary.
+
+```{r, echo=FALSE,results='hide'}
+acf2(diff_log_ts_new, max.lag = 70)
+```
+
+  As you can see in the plots above, the ACF and PACF are both tailing off. This suggests the presence of an ARMA process. Therefore, I tested out multiple different combinations of p, d, q, and seasonal P, D, Q for my sarima function to determine which combination gave the best result.
+  After testing multiple different models, I narrowed it down to two different models. One of them was where p=1, d=1, q=1, P=0, D=1, and Q=1. The other model consisted of p=1, d=1, q=1, P=1, D=1, and Q=2. For both models, I had to set seasonality equal to 7. I was originally going to set seasonality to 365, but my code kept crashing, so I chose to go for a weekly seasonality using the daily data set instead.
+
+```{r, echo=FALSE,results='hide'}
+snp_1 = sarima(diff_log_ts_new, p=1,d=1,q=1,P=0,D=1,Q=1,S=7)
+snp_2 = sarima(diff_log_ts_new, p=1,d=1,q=1,P=1,D=1,Q=2,S=7)
+```
+
+  The reason that these two models were the best model suggestions was because they had the lowest AIC compared to all of the other models I tested. Looking at the summary statistics of these models, they have almost identical results. Because of that, I chose to just commit with one final model, which was snp_2, since it had a lower AIC compared to snp_1. 
+
+```{r, echo=FALSE,results='hide'}
+snp_2 = sarima(diff_log_ts_new, p=1,d=1,q=1,P=1,D=1,Q=2,S=7)
+```
+
+  Based on the standardized residuals plot, there is white noise present, and the residuals are generally centered around zero, which hints that the model is capturing the overall trend.
+
+
+# Results
+
+```{r, echo=FALSE}
+forecast_snp_test1 = sarima.for(SP500, n.ahead=5,p=1,d=1,q=1,P=1,D=1,Q=2,S=7)
+print(forecast_snp_test1)
+```
+
+  When performing my forecast, I used the same p, d, q, and seasonal P, D, Q values, but switched to the original dataset because I wanted it to print out the correctly scaled S&P 500 closing prices. The model's performance captures the trends, especially through short-term forecasts. The confidence intervals give a good idea of what the range of uncertainty is, which is important for investor in how they make their decisions. For stakeholders, it is important for them to not change their methods in how they invest because the values seem to be stabilized during this period. However, the increasing uncertainty confidence interval is something that they should be cautious of since there may be unexpected drops in the stock market.
+
+
+# Discussion
+
+  Overall, the next five forecasted values of the S&P 500 daily index of the closing prices are stable. One limitation that my study suffered from was that I had to perform the model with seasonality equal to 7 instead of 365. I think setting the seasonality to 365 would have provided more accurate results. While the model performance went fine, it could benefit from the lack of these limitations.
+
+\newpage
+
+# References
+
+S&P Dow Jones Indices LLC, S&P 500 [SP500], retrieved from FRED, Federal Reserve Bank of St. Louis; https://fred.stlouisfed.org/series/SP500, December 20, 2024.
